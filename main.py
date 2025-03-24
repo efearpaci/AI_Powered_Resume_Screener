@@ -8,7 +8,7 @@ from utils.preprocessing import clean_resume
 from models.sentence_transformer_model import encode_text
 from utils.ranking import compute_similarity
 
-df = pd.read_csv("data/UpdatedResumeDataSet.csv", encoding = "utf-8")
+df = pd.read_csv("data/UpdatedResumeDataSet.csv", encoding ="utf-8")
 df = df[df["Category"] == "Data Science"]
 
 df["Cleaned_Resume"] = df["Resume"].apply(clean_resume)

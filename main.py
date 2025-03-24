@@ -14,8 +14,7 @@ df = df[df["Category"] == "Data Science"]  # Filter for a specific category, e.g
 # Preprocess resumes
 df["Cleaned_Resume"] = df["Resume"].apply(clean_resume)
 
-# Encode job description and resumes
-job_desc = "We want a Python and ML-experienced Data Scientist with SQL and TensorFlow knowledge."
+
 job_vec = encode_text(job_desc)
 
 # Calculate similarity score for each resume

@@ -8,8 +8,7 @@ from utils.preprocessing import clean_resume
 from models.sentence_transformer_model import encode_text
 from utils.ranking import compute_similarity
 
-# Load data
-df = pd.read_csv("data/UpdatedResumeDataSet.csv")
+df = pd.read_csv("data/UpdatedResumeDataSet.csv", encoding = "utf-8")
 df = df[df["Category"] == "Data Science"]  # Filter for a specific category, e.g., Data Science
 
 # Preprocess resumes

@@ -5,11 +5,6 @@ from tkinter import ttk, scrolledtext, filedialog, messagebox
 import pandas as pd
 import threading
 
-from utils.preprocessing import clean_resume
-from models.sentence_transformer_model import encode_text
-from utils.ranking import compute_similarity
-
-
 class ResumeMatcherGUI:
     def __init__(self, root):
         self.root = root
@@ -138,23 +133,19 @@ class ResumeMatcherGUI:
         threading.Thread(target=self.process_matching, daemon=True).start()
 
     def open_resume_details(self, event):
-        # Get selected item
         selected_item = self.results_tree.selection()
         if not selected_item:
             return
 
-        # Get the index from the tree (subtract 1 because ranking starts at 1)
         item_values = self.results_tree.item(selected_item[0], "values")
         rank = int(item_values[0]) - 1
 
-        # Get the category filter
         selected_category = self.category_var.get()
         working_df = self.df.copy()
 
         if selected_category != "All Categories":
             working_df = working_df[working_df["Category"] == selected_category]
 
-        # Sort the dataframe the same way as in process_matching
         job_desc = self.job_text.get(1.0, tk.END).strip()
         from utils.ranking import get_ranking_method
         ranking_method = get_ranking_method("advanced")
@@ -164,11 +155,9 @@ class ResumeMatcherGUI:
         )
         df_sorted = working_df.sort_values(by="Score", ascending=False)
 
-        # Get the full resume text for the selected rank
         if rank < len(df_sorted):
             resume_text = df_sorted.iloc[rank]["Resume"]
 
-            # Create a popup window with the full resume
             resume_window = tk.Toplevel(self.root)
             resume_window.title(f"Resume Details - Rank #{rank + 1}")
             resume_window.geometry("700x500")
@@ -176,13 +165,11 @@ class ResumeMatcherGUI:
             frame = ttk.Frame(resume_window, padding=10)
             frame.pack(fill=tk.BOTH, expand=True)
 
-            # Add a scrolled text widget for the resume content
             resume_display = scrolledtext.ScrolledText(frame, wrap=tk.WORD)
             resume_display.pack(fill=tk.BOTH, expand=True)
             resume_display.insert(tk.END, resume_text)
             resume_display.config(state=tk.DISABLED)  # Make it read-only
 
-            # Add a close button
             ttk.Button(frame, text="Close", command=resume_window.destroy).pack(pady=10)
     def process_matching(self):
         try:
@@ -191,7 +178,6 @@ class ResumeMatcherGUI:
 
             job_desc = self.job_text.get(1.0, tk.END).strip()
 
-            # Use the advanced ranking method
             from utils.ranking import get_ranking_method
             ranking_method = get_ranking_method("advanced")
 
@@ -205,7 +191,6 @@ class ResumeMatcherGUI:
                 self.status_var.set("Error reading resume file")
                 return
 
-            # Direct ranking without intermediate vector encoding
             similarity_score = ranking_method(job_desc, resume_text)
             self.progress_var.set(50)
 
@@ -226,7 +211,6 @@ class ResumeMatcherGUI:
 
             self.progress_var.set(70)
 
-            # Apply ranking directly on resumes
             working_df["Score"] = working_df["Resume"].apply(
                 lambda x: ranking_method(job_desc, x)
             )

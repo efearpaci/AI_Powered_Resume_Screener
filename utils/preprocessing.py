@@ -1,7 +1,6 @@
 import re
 
 def clean_resume(text):
-    """Clean up the resume text"""
     text = text.replace('\r\n', ' ').replace('\n', ' ')
     text = re.sub(r'\*', '', text)  # Remove bullet points
     text = re.sub(r'[^\w\s,.;:?!-]', '', text)  # Remove unwanted special characters

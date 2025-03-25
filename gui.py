@@ -25,18 +25,15 @@ class ResumeMatcherGUI:
         self.load_dataset()
 
     def create_widgets(self):
-        # Main frame
         main_frame = ttk.Frame(self.root, padding=10)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Job description section
         job_frame = ttk.LabelFrame(main_frame, text="Job Description", padding=10)
         job_frame.pack(fill=tk.BOTH, expand=True, pady=5)
 
         self.job_text = scrolledtext.ScrolledText(job_frame, wrap=tk.WORD, height=8)
         self.job_text.pack(fill=tk.BOTH, expand=True)
 
-        # Resume section
         resume_frame = ttk.LabelFrame(main_frame, text="Resume", padding=10)
         resume_frame.pack(fill=tk.BOTH, expand=False, pady=5)
 
@@ -50,7 +47,6 @@ class ResumeMatcherGUI:
         ttk.Label(resume_btn_frame, textvariable=self.resume_path_var).pack(side=tk.LEFT, padx=5, fill=tk.X,
                                                                             expand=True)
 
-        # Categories section
         category_frame = ttk.LabelFrame(main_frame, text="Category Filter", padding=10)
         category_frame.pack(fill=tk.X, pady=5)
 
@@ -59,23 +55,19 @@ class ResumeMatcherGUI:
         self.category_dropdown = ttk.Combobox(category_frame, textvariable=self.category_var, state="readonly")
         self.category_dropdown.pack(fill=tk.X)
 
-        # Action buttons
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(fill=tk.X, pady=10)
 
         ttk.Button(btn_frame, text="Find Matches", command=self.find_matches).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Clear", command=self.clear_fields).pack(side=tk.LEFT, padx=5)
 
-        # Progress bar
         self.progress_var = tk.DoubleVar()
         self.progress = ttk.Progressbar(main_frame, variable=self.progress_var, maximum=100)
         self.progress.pack(fill=tk.X, pady=5)
 
-        # Results section
         results_frame = ttk.LabelFrame(main_frame, text="Results", padding=10)
         results_frame.pack(fill=tk.BOTH, expand=True, pady=5)
 
-        # Your resume score
         your_score_frame = ttk.Frame(results_frame)
         your_score_frame.pack(fill=tk.X, pady=5)
 
@@ -88,10 +80,8 @@ class ResumeMatcherGUI:
         self.match_quality_var = tk.StringVar()
         ttk.Label(your_score_frame, textvariable=self.match_quality_var).pack(side=tk.LEFT, padx=20)
 
-        # Top matches from dataset
         ttk.Label(results_frame, text="Top Matches from Dataset:").pack(anchor=tk.W, pady=5)
 
-        # Create treeview for results
         columns = ("Rank", "Score", "Resume Snippet")
         self.results_tree = ttk.Treeview(results_frame, columns=columns, show="headings", height=10)
 
@@ -104,7 +94,6 @@ class ResumeMatcherGUI:
 
         self.results_tree.pack(fill=tk.BOTH, expand=True)
 
-        # Status bar
         self.status_var = tk.StringVar()
         self.status_var.set("Ready")
         status_bar = ttk.Label(self.root, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W)
@@ -115,7 +104,6 @@ class ResumeMatcherGUI:
             self.status_var.set("Loading resume dataset...")
             self.df = pd.read_csv("data/UpdatedResumeDataSet.csv", encoding="utf-8")
 
-            # Populate category dropdown
             categories = ["All Categories"] + list(self.df['Category'].unique())
             self.category_dropdown['values'] = categories
 
@@ -142,12 +130,10 @@ class ResumeMatcherGUI:
         self.your_score_var.set("N/A")
         self.match_quality_var.set("")
 
-        # Clear results
         for item in self.results_tree.get_children():
             self.results_tree.delete(item)
 
     def find_matches(self):
-        # Validate inputs
         job_desc = self.job_text.get(1.0, tk.END).strip()
         if not job_desc:
             messagebox.showwarning("Warning", "Please enter a job description")
@@ -157,7 +143,6 @@ class ResumeMatcherGUI:
             messagebox.showwarning("Warning", "Please select a resume file")
             return
 
-        # Start processing in a separate thread to keep UI responsive
         threading.Thread(target=self.process_matching, daemon=True).start()
 
     def process_matching(self):
@@ -165,12 +150,10 @@ class ResumeMatcherGUI:
             self.status_var.set("Processing...")
             self.progress_var.set(10)
 
-            # Get job description and convert to vector
             job_desc = self.job_text.get(1.0, tk.END).strip()
             self.job_vec = encode_text(job_desc)
             self.progress_var.set(30)
 
-            # Read resume file
             try:
                 with open(self.resume_path, 'r', encoding='utf-8') as file:
                     resume_text = file.read()
@@ -179,16 +162,13 @@ class ResumeMatcherGUI:
                 self.status_var.set("Error reading resume file")
                 return
 
-            # Process resume
             cleaned_resume = clean_resume(resume_text)
             resume_vec = encode_text(cleaned_resume)
             similarity_score = compute_similarity(self.job_vec, resume_vec)
             self.progress_var.set(50)
 
-            # Update your resume score
             self.root.after(0, lambda: self.your_score_var.set(f"{similarity_score:.4f}"))
 
-            # Set match quality text
             if similarity_score > 0.7:
                 quality_text = "Great match! Your resume aligns well with the job description."
             elif similarity_score > 0.5:
@@ -198,14 +178,12 @@ class ResumeMatcherGUI:
 
             self.root.after(0, lambda: self.match_quality_var.set(quality_text))
 
-            # Filter by selected category if needed
             selected_category = self.category_var.get()
             working_df = self.df.copy()
 
             if selected_category != "All Categories":
                 working_df = working_df[working_df["Category"] == selected_category]
 
-            # Process dataset resumes
             working_df["Cleaned_Resume"] = working_df["Resume"].apply(clean_resume)
             self.progress_var.set(70)
 
@@ -214,13 +192,10 @@ class ResumeMatcherGUI:
             )
             self.progress_var.set(90)
 
-            # Sort and display results
             df_sorted = working_df.sort_values(by="Score", ascending=False)
 
-            # Clear previous results
             self.root.after(0, lambda: [self.results_tree.delete(item) for item in self.results_tree.get_children()])
 
-            # Add new results
             for idx, (_, row) in enumerate(df_sorted.head(10).iterrows()):
                 resume_snippet = row['Cleaned_Resume'][:200] + "..." if len(row['Cleaned_Resume']) > 200 else row[
                     'Cleaned_Resume']
@@ -234,7 +209,6 @@ class ResumeMatcherGUI:
             self.root.after(0, lambda: messagebox.showerror("Error", f"An error occurred: {str(e)}"))
             self.status_var.set("Error during processing")
         finally:
-            # Reset progress bar after a delay
             self.root.after(2000, lambda: self.progress_var.set(0))
 
 

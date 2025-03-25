@@ -13,7 +13,7 @@ from utils.ranking import compute_similarity
 class ResumeMatcherGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Resume Matcher")
+        self.root.title("AI Powered Resume Screener")
         self.root.geometry("900x700")
         self.root.minsize(800, 600)
 
@@ -58,7 +58,7 @@ class ResumeMatcherGUI:
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(fill=tk.X, pady=10)
 
-        ttk.Button(btn_frame, text="Find Matches", command=self.find_matches).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Calculate scores", command=self.find_matches).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Clear", command=self.clear_fields).pack(side=tk.LEFT, padx=5)
 
         self.progress_var = tk.DoubleVar()
@@ -68,17 +68,8 @@ class ResumeMatcherGUI:
         results_frame = ttk.LabelFrame(main_frame, text="Results", padding=10)
         results_frame.pack(fill=tk.BOTH, expand=True, pady=5)
 
-        your_score_frame = ttk.Frame(results_frame)
-        your_score_frame.pack(fill=tk.X, pady=5)
-
-        ttk.Label(your_score_frame, text="Your Resume Score:").pack(side=tk.LEFT, padx=5)
-        self.your_score_var = tk.StringVar()
-        self.your_score_var.set("N/A")
-        ttk.Label(your_score_frame, textvariable=self.your_score_var, font=("Arial", 12, "bold")).pack(side=tk.LEFT,
-                                                                                                       padx=5)
-
         self.match_quality_var = tk.StringVar()
-        ttk.Label(your_score_frame, textvariable=self.match_quality_var).pack(side=tk.LEFT, padx=20)
+        ttk.Label(results_frame, textvariable=self.match_quality_var).pack(anchor=tk.W, pady=5)
 
         ttk.Label(results_frame, text="Top Matches from Dataset:").pack(anchor=tk.W, pady=5)
 
@@ -93,6 +84,8 @@ class ResumeMatcherGUI:
         self.results_tree.column("Resume Snippet", width=600)
 
         self.results_tree.pack(fill=tk.BOTH, expand=True)
+        self.results_tree.bind("<Double-1>", self.open_resume_details)
+
 
         self.status_var = tk.StringVar()
         self.status_var.set("Ready")
@@ -127,7 +120,6 @@ class ResumeMatcherGUI:
         self.resume_path = None
         self.resume_path_var.set("No file selected")
         self.category_var.set("All Categories")
-        self.your_score_var.set("N/A")
         self.match_quality_var.set("")
 
         for item in self.results_tree.get_children():
@@ -145,13 +137,64 @@ class ResumeMatcherGUI:
 
         threading.Thread(target=self.process_matching, daemon=True).start()
 
+    def open_resume_details(self, event):
+        # Get selected item
+        selected_item = self.results_tree.selection()
+        if not selected_item:
+            return
+
+        # Get the index from the tree (subtract 1 because ranking starts at 1)
+        item_values = self.results_tree.item(selected_item[0], "values")
+        rank = int(item_values[0]) - 1
+
+        # Get the category filter
+        selected_category = self.category_var.get()
+        working_df = self.df.copy()
+
+        if selected_category != "All Categories":
+            working_df = working_df[working_df["Category"] == selected_category]
+
+        # Sort the dataframe the same way as in process_matching
+        job_desc = self.job_text.get(1.0, tk.END).strip()
+        from utils.ranking import get_ranking_method
+        ranking_method = get_ranking_method("advanced")
+
+        working_df["Score"] = working_df["Resume"].apply(
+            lambda x: ranking_method(job_desc, x)
+        )
+        df_sorted = working_df.sort_values(by="Score", ascending=False)
+
+        # Get the full resume text for the selected rank
+        if rank < len(df_sorted):
+            resume_text = df_sorted.iloc[rank]["Resume"]
+
+            # Create a popup window with the full resume
+            resume_window = tk.Toplevel(self.root)
+            resume_window.title(f"Resume Details - Rank #{rank + 1}")
+            resume_window.geometry("700x500")
+
+            frame = ttk.Frame(resume_window, padding=10)
+            frame.pack(fill=tk.BOTH, expand=True)
+
+            # Add a scrolled text widget for the resume content
+            resume_display = scrolledtext.ScrolledText(frame, wrap=tk.WORD)
+            resume_display.pack(fill=tk.BOTH, expand=True)
+            resume_display.insert(tk.END, resume_text)
+            resume_display.config(state=tk.DISABLED)  # Make it read-only
+
+            # Add a close button
+            ttk.Button(frame, text="Close", command=resume_window.destroy).pack(pady=10)
     def process_matching(self):
         try:
             self.status_var.set("Processing...")
             self.progress_var.set(10)
 
             job_desc = self.job_text.get(1.0, tk.END).strip()
-            self.job_vec = encode_text(job_desc)
+
+            # Use the advanced ranking method
+            from utils.ranking import get_ranking_method
+            ranking_method = get_ranking_method("advanced")
+
             self.progress_var.set(30)
 
             try:
@@ -162,12 +205,9 @@ class ResumeMatcherGUI:
                 self.status_var.set("Error reading resume file")
                 return
 
-            cleaned_resume = clean_resume(resume_text)
-            resume_vec = encode_text(cleaned_resume)
-            similarity_score = compute_similarity(self.job_vec, resume_vec)
+            # Direct ranking without intermediate vector encoding
+            similarity_score = ranking_method(job_desc, resume_text)
             self.progress_var.set(50)
-
-            self.root.after(0, lambda: self.your_score_var.set(f"{similarity_score:.4f}"))
 
             if similarity_score > 0.7:
                 quality_text = "Great match! Your resume aligns well with the job description."
@@ -184,11 +224,11 @@ class ResumeMatcherGUI:
             if selected_category != "All Categories":
                 working_df = working_df[working_df["Category"] == selected_category]
 
-            working_df["Cleaned_Resume"] = working_df["Resume"].apply(clean_resume)
             self.progress_var.set(70)
 
-            working_df["Score"] = working_df["Cleaned_Resume"].apply(
-                lambda x: compute_similarity(self.job_vec, encode_text(x))
+            # Apply ranking directly on resumes
+            working_df["Score"] = working_df["Resume"].apply(
+                lambda x: ranking_method(job_desc, x)
             )
             self.progress_var.set(90)
 
@@ -197,8 +237,7 @@ class ResumeMatcherGUI:
             self.root.after(0, lambda: [self.results_tree.delete(item) for item in self.results_tree.get_children()])
 
             for idx, (_, row) in enumerate(df_sorted.head(10).iterrows()):
-                resume_snippet = row['Cleaned_Resume'][:200] + "..." if len(row['Cleaned_Resume']) > 200 else row[
-                    'Cleaned_Resume']
+                resume_snippet = row['Resume'][:200] + "..." if len(row['Resume']) > 200 else row['Resume']
                 self.root.after(0, lambda idx=idx, score=row['Score'], snippet=resume_snippet:
                 self.results_tree.insert("", tk.END, values=(idx + 1, f"{score:.4f}", snippet)))
 
@@ -210,7 +249,6 @@ class ResumeMatcherGUI:
             self.status_var.set("Error during processing")
         finally:
             self.root.after(2000, lambda: self.progress_var.set(0))
-
 
 def main():
     root = tk.Tk()

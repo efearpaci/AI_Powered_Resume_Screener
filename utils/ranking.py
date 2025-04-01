@@ -34,12 +34,19 @@ class AdvancedRankingModel:
         with torch.no_grad():
             outputs = self.model(**inputs)
 
-        if hasattr(outputs, 'logits') and outputs.logits.shape[1] >= 2:
-            score = torch.softmax(outputs.logits, dim=1)[0][1].item()
+        # Get logits from the output (assume binary classification)
+        logits = outputs.logits[0]
+        if logits.shape[0] >= 2:
+            # Compute probability for class 1 using softmax
+            prob = torch.softmax(logits, dim=0)[1].item()
         else:
-            score = torch.sigmoid(outputs.logits[0]).item()
+            # If only one logit is available, use sigmoid
+            prob = torch.sigmoid(logits).item()
 
-        return score
+        # Calibrate the raw probability using a scaling factor (e.g., 1.5)
+        # This factor can be adjusted based on your validation tests
+        calibrated_score = max(0, min(1, prob * 1.5))
+        return calibrated_score
 
 
 def standard_ranking(job_desc, resume_text):

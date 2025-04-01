@@ -4,6 +4,13 @@ import tkinter as tk
 from tkinter import ttk, scrolledtext, filedialog, messagebox
 import pandas as pd
 import threading
+import warnings
+import logging
+
+warnings.filterwarnings("ignore", category=UserWarning, message="The class 'NSOpenPanel' overrides the method identifier")
+warnings.filterwarnings("ignore", category=UserWarning, message="Some weights of BertForSequenceClassification were not initialized")
+logging.basicConfig(level=logging.WARNING)
+os.environ['PYTHONWARNINGS'] = 'ignore'
 
 class ResumeMatcherGUI:
     def __init__(self, root):
@@ -103,7 +110,7 @@ class ResumeMatcherGUI:
     def browse_resume(self):
         file_path = filedialog.askopenfilename(
             title="Select Resume File",
-            filetypes=[("Text files", "*.txt"), ("All files", "*.*")]
+            filetypes=[("Text files", "*.txt"), ("PDF files", "*.pdf"), ("Word files", "*.docx"), ("All files", "*.*")]
         )
 
         if file_path:
@@ -171,69 +178,80 @@ class ResumeMatcherGUI:
             resume_display.config(state=tk.DISABLED)  # Make it read-only
 
             ttk.Button(frame, text="Close", command=resume_window.destroy).pack(pady=10)
+
     def process_matching(self):
         try:
             self.status_var.set("Processing...")
             self.progress_var.set(10)
-
             job_desc = self.job_text.get(1.0, tk.END).strip()
+            if not job_desc:
+                self.status_var.set("Please enter a job description")
+                return
 
             from utils.ranking import get_ranking_method
             ranking_method = get_ranking_method("advanced")
+            ext = os.path.splitext(self.resume_path)[1].lower()
 
-            self.progress_var.set(30)
+            if ext == ".csv":
+                # Process uploaded CSV file to get top 10 matches from dataset
+                import pandas as pd
+                try:
+                    uploaded_df = pd.read_csv(self.resume_path, encoding='utf-8')
+                except Exception as e:
+                    self.root.after(0, lambda: messagebox.showerror("Error", f"Error reading CSV file: {str(e)}"))
+                    self.status_var.set("Error reading CSV file")
+                    return
 
-            try:
-                with open(self.resume_path, 'r', encoding='utf-8') as file:
-                    resume_text = file.read()
-            except Exception as e:
-                self.root.after(0, lambda: messagebox.showerror("Error", f"Error reading resume file: {str(e)}"))
-                self.status_var.set("Error reading resume file")
-                return
+                # Optional: Filter by category if applicable
+                selected_category = self.category_var.get()
+                if selected_category != "All Categories":
+                    uploaded_df = uploaded_df[uploaded_df["Category"] == selected_category]
 
-            similarity_score = ranking_method(job_desc, resume_text)
-            self.progress_var.set(50)
+                self.progress_var.set(30)
+                uploaded_df["Score"] = uploaded_df["Resume"].apply(lambda x: ranking_method(job_desc, x))
+                self.progress_var.set(90)
+                df_sorted = uploaded_df.sort_values(by="Score", ascending=False)
 
-            if similarity_score > 0.7:
-                quality_text = "Great match! Your resume aligns well with the job description."
-            elif similarity_score > 0.5:
-                quality_text = "Good match. Consider highlighting relevant skills more prominently."
+                self.root.after(0,
+                                lambda: [self.results_tree.delete(item) for item in self.results_tree.get_children()])
+                for idx, (_, row) in enumerate(df_sorted.head(10).iterrows()):
+                    resume_snippet = row['Resume'][:200] + "..." if len(row['Resume']) > 200 else row['Resume']
+                    self.root.after(0, lambda idx=idx, score=row['Score'], snippet=resume_snippet:
+                    self.results_tree.insert("", tk.END, values=(idx + 1, f"{score:.4f}", snippet)))
+                self.root.after(0, lambda: self.match_quality_var.set(""))
+                self.progress_var.set(100)
+                self.status_var.set("Matching complete")
             else:
-                quality_text = "Low match. You might want to tailor your resume more for this position."
+                # Process single resume file (txt, pdf, docx)
+                try:
+                    from utils.resume_reader import read_resume
+                    resume_text = read_resume(self.resume_path)
+                except Exception as e:
+                    self.root.after(0, lambda: messagebox.showerror("Error", f"Error reading resume file: {str(e)}"))
+                    self.status_var.set("Error reading resume file")
+                    return
 
-            self.root.after(0, lambda: self.match_quality_var.set(quality_text))
+                self.progress_var.set(50)
+                similarity_score = ranking_method(job_desc, resume_text)
+                self.progress_var.set(70)
+                if similarity_score > 0.7:
+                    quality_text = "Great match! Your resume aligns well with the job description."
+                elif similarity_score > 0.5:
+                    quality_text = "Good match. Consider highlighting relevant skills more prominently."
+                else:
+                    quality_text = "Low match. You might want to tailor your resume more for this position."
 
-            selected_category = self.category_var.get()
-            working_df = self.df.copy()
-
-            if selected_category != "All Categories":
-                working_df = working_df[working_df["Category"] == selected_category]
-
-            self.progress_var.set(70)
-
-            working_df["Score"] = working_df["Resume"].apply(
-                lambda x: ranking_method(job_desc, x)
-            )
-            self.progress_var.set(90)
-
-            df_sorted = working_df.sort_values(by="Score", ascending=False)
-
-            self.root.after(0, lambda: [self.results_tree.delete(item) for item in self.results_tree.get_children()])
-
-            for idx, (_, row) in enumerate(df_sorted.head(10).iterrows()):
-                resume_snippet = row['Resume'][:200] + "..." if len(row['Resume']) > 200 else row['Resume']
-                self.root.after(0, lambda idx=idx, score=row['Score'], snippet=resume_snippet:
-                self.results_tree.insert("", tk.END, values=(idx + 1, f"{score:.4f}", snippet)))
-
-            self.progress_var.set(100)
-            self.status_var.set("Matching complete")
-
+                self.root.after(0,
+                                lambda: self.match_quality_var.set(quality_text + f" (Score: {similarity_score:.4f})"))
+                self.root.after(0,
+                                lambda: [self.results_tree.delete(item) for item in self.results_tree.get_children()])
+                self.progress_var.set(100)
+                self.status_var.set("Matching complete")
         except Exception as e:
             self.root.after(0, lambda: messagebox.showerror("Error", f"An error occurred: {str(e)}"))
             self.status_var.set("Error during processing")
         finally:
             self.root.after(2000, lambda: self.progress_var.set(0))
-
 def main():
     root = tk.Tk()
     app = ResumeMatcherGUI(root)

@@ -7,10 +7,7 @@ import threading
 import warnings
 import logging
 
-warnings.filterwarnings("ignore", category=UserWarning, message="The class 'NSOpenPanel' overrides the method identifier")
-warnings.filterwarnings("ignore", category=UserWarning, message="Some weights of BertForSequenceClassification were not initialized")
 logging.basicConfig(level=logging.WARNING)
-os.environ['PYTHONWARNINGS'] = 'ignore'
 
 class ResumeMatcherGUI:
     def __init__(self, root):
@@ -211,6 +208,7 @@ class ResumeMatcherGUI:
                 uploaded_df["Score"] = uploaded_df["Resume"].apply(lambda x: ranking_method(job_desc, x))
                 self.progress_var.set(90)
                 df_sorted = uploaded_df.sort_values(by="Score", ascending=False)
+                df_sorted = df_sorted.drop_duplicates(subset=["Resume"], keep="first")
 
                 self.root.after(0,
                                 lambda: [self.results_tree.delete(item) for item in self.results_tree.get_children()])
@@ -252,6 +250,8 @@ class ResumeMatcherGUI:
             self.status_var.set("Error during processing")
         finally:
             self.root.after(2000, lambda: self.progress_var.set(0))
+
+
 def main():
     root = tk.Tk()
     app = ResumeMatcherGUI(root)

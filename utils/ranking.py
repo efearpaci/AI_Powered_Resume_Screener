@@ -1,6 +1,16 @@
 import torch
 from models.sentence_transformer_model import encode_text
 
+def compute_skill_overlap(job_desc, resume_text, skills):
+    """
+    Compute an overlap score for the given skills.
+    Returns a fraction (0 to 1) representing the proportion of required skills
+    that appear in both the job description and the resume.
+    """
+    job_desc_lower = job_desc.lower()
+    resume_text_lower = resume_text.lower()
+    matching = [skill for skill in skills if skill in job_desc_lower and skill in resume_text_lower]
+    return len(matching) / len(skills) if skills else 0.0
 
 def compute_similarity(vec1, vec2):
     if torch.is_tensor(vec1) and torch.is_tensor(vec2):
@@ -37,16 +47,28 @@ class AdvancedRankingModel:
         # Get logits from the output (assume binary classification)
         logits = outputs.logits[0]
         if logits.shape[0] >= 2:
-            # Compute probability for class 1 using softmax
             prob = torch.softmax(logits, dim=0)[1].item()
         else:
-            # If only one logit is available, use sigmoid
             prob = torch.sigmoid(logits).item()
 
-        # Calibrate the raw probability using a scaling factor (e.g., 1.5)
-        # This factor can be adjusted based on your validation tests
-        calibrated_score = max(0, min(1, prob * 1.5))
-        return calibrated_score
+        # Semantic score (using the raw probability)
+        semantic_score = max(0, min(1, prob))  # No extra scaling
+
+        # Define required skills for the job
+        required_skills = [
+            "python", "java", "c++", "c#", "javascript", "sql", "nosql",
+            "machine learning", "data analysis", "blockchain", "testing", "devops",
+            "cloud", "docker", "kubernetes", "tensorflow", "pytorch", "database",
+            "networking", "security", "angular", "react", "node"
+        ]
+
+        # Compute skill overlap score
+        skill_score = compute_skill_overlap(job_desc, resume_text, required_skills)
+
+        # Combine semantic and skill scores (70% semantic, 30% skill)
+        combined_score = 0.7 * semantic_score + 0.3 * skill_score
+
+        return combined_score
 
 
 def standard_ranking(job_desc, resume_text):

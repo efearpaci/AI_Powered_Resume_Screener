@@ -1,6 +1,5 @@
 import torch
 from models.sentence_transformer_model import encode_text
-# Define a dictionary of role-specific required skills
 ROLE_SKILLS = {
     "data science": ["python", "machine learning", "data analysis", "sql", "tensorflow", "pytorch", "r", "statistics"],
     "web designing": ["html", "css", "javascript", "react", "angular", "ux", "ui", "bootstrap", "photoshop"],
@@ -10,11 +9,6 @@ ROLE_SKILLS = {
     "network security engineer": ["network security", "firewall", "vpn", "cryptography", "penetration testing", "ids", "ips", "wireshark"]
 }
 def compute_skill_overlap(job_desc, resume_text, skills):
-    """
-    Compute an overlap score for the given skills.
-    Returns a fraction (0 to 1) representing the proportion of required skills
-    that appear in both the job description and the resume.
-    """
     job_desc_lower = job_desc.lower()
     resume_text_lower = resume_text.lower()
     matching = [skill for skill in skills if skill in job_desc_lower and skill in resume_text_lower]
@@ -33,7 +27,7 @@ class AdvancedRankingModel:
             from transformers import AutoTokenizer, AutoModelForSequenceClassification
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
             self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
-            self.model.eval()  # Set the model to evaluation mode to disable dropout
+            self.model.eval()
             self.initialized = True
         except Exception as e:
             print(f"Error loading transformer model: {e}")
@@ -53,17 +47,14 @@ class AdvancedRankingModel:
         with torch.no_grad():
             outputs = self.model(**inputs)
 
-        # Get logits from the output (assume binary classification)
         logits = outputs.logits[0]
         if logits.shape[0] >= 2:
             prob = torch.softmax(logits, dim=0)[1].item()
         else:
             prob = torch.sigmoid(logits).item()
 
-        # Semantic score (using the raw probability)
-        semantic_score = max(0, min(1, prob))  # No extra scaling
+        semantic_score = max(0, min(1, prob))
 
-        # Select required skills based on the job category
         try:
             job_category_lc = job_category.lower()
         except Exception:
@@ -71,7 +62,6 @@ class AdvancedRankingModel:
         if job_category_lc in ROLE_SKILLS:
             required_skills = ROLE_SKILLS[job_category_lc]
         else:
-            # Fallback: use a broader general IT skills list
             required_skills = [
                 "python", "java", "c++", "c#", "javascript", "sql", "nosql",
                 "machine learning", "data analysis", "blockchain", "testing", "devops",
@@ -79,7 +69,6 @@ class AdvancedRankingModel:
                 "networking", "security", "angular", "react", "node"
             ]
 
-        # Compute skill overlap score
         skill_score = compute_skill_overlap(job_desc, resume_text, required_skills)
 
         # Combine semantic and skill scores (70% semantic, 30% skill)

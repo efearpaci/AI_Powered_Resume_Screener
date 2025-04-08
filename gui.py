@@ -1,10 +1,8 @@
 import os
-import sys
 import tkinter as tk
 from tkinter import ttk, scrolledtext, filedialog, messagebox
 import pandas as pd
 import threading
-import warnings
 import logging
 
 logging.basicConfig(level=logging.WARNING)
@@ -190,7 +188,6 @@ class ResumeMatcherGUI:
             ext = os.path.splitext(self.resume_path)[1].lower()
 
             if ext == ".csv":
-                # Process uploaded CSV file to get top 10 matches from dataset
                 import pandas as pd
                 try:
                     uploaded_df = pd.read_csv(self.resume_path, encoding='utf-8')
@@ -199,7 +196,6 @@ class ResumeMatcherGUI:
                     self.status_var.set("Error reading CSV file")
                     return
 
-                # Optional: Filter by category if applicable
                 selected_category = self.category_var.get()
                 if selected_category != "All Categories":
                     uploaded_df = uploaded_df[uploaded_df["Category"] == selected_category]
@@ -220,7 +216,6 @@ class ResumeMatcherGUI:
                 self.progress_var.set(100)
                 self.status_var.set("Matching complete")
             else:
-                # Process single resume file (txt, pdf, docx)
                 try:
                     from utils.resume_reader import read_resume
                     resume_text = read_resume(self.resume_path)

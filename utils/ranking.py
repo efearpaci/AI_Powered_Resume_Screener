@@ -1,6 +1,14 @@
 import torch
 from models.sentence_transformer_model import encode_text
-
+# Define a dictionary of role-specific required skills
+ROLE_SKILLS = {
+    "data science": ["python", "machine learning", "data analysis", "sql", "tensorflow", "pytorch", "r", "statistics"],
+    "web designing": ["html", "css", "javascript", "react", "angular", "ux", "ui", "bootstrap", "photoshop"],
+    "java developer": ["java", "spring", "hibernate", "maven", "j2ee", "servlets", "jsp"],
+    "automation testing": ["selenium", "cucumber", "qa", "test automation", "appium", "junit", "pytest"],
+    "python developer": ["python", "django", "flask", "rest", "api", "pandas", "numpy", "sql"],
+    "network security engineer": ["network security", "firewall", "vpn", "cryptography", "penetration testing", "ids", "ips", "wireshark"]
+}
 def compute_skill_overlap(job_desc, resume_text, skills):
     """
     Compute an overlap score for the given skills.
@@ -25,12 +33,13 @@ class AdvancedRankingModel:
             from transformers import AutoTokenizer, AutoModelForSequenceClassification
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
             self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
+            self.model.eval()  # Set the model to evaluation mode to disable dropout
             self.initialized = True
         except Exception as e:
             print(f"Error loading transformer model: {e}")
             self.initialized = False
 
-    def compute_relevance(self, job_desc, resume_text):
+    def compute_relevance(self, job_desc, resume_text, job_category="default"):
         if not self.initialized:
             return standard_ranking(job_desc, resume_text)
 
@@ -54,13 +63,21 @@ class AdvancedRankingModel:
         # Semantic score (using the raw probability)
         semantic_score = max(0, min(1, prob))  # No extra scaling
 
-        # Define required skills for the job
-        required_skills = [
-            "python", "java", "c++", "c#", "javascript", "sql", "nosql",
-            "machine learning", "data analysis", "blockchain", "testing", "devops",
-            "cloud", "docker", "kubernetes", "tensorflow", "pytorch", "database",
-            "networking", "security", "angular", "react", "node"
-        ]
+        # Select required skills based on the job category
+        try:
+            job_category_lc = job_category.lower()
+        except Exception:
+            job_category_lc = ""
+        if job_category_lc in ROLE_SKILLS:
+            required_skills = ROLE_SKILLS[job_category_lc]
+        else:
+            # Fallback: use a broader general IT skills list
+            required_skills = [
+                "python", "java", "c++", "c#", "javascript", "sql", "nosql",
+                "machine learning", "data analysis", "blockchain", "testing", "devops",
+                "cloud", "docker", "kubernetes", "tensorflow", "pytorch", "database",
+                "networking", "security", "angular", "react", "node"
+            ]
 
         # Compute skill overlap score
         skill_score = compute_skill_overlap(job_desc, resume_text, required_skills)

@@ -224,13 +224,15 @@ class ResumeMatcherGUI:
                 try:
                     from utils.resume_reader import read_resume
                     resume_text = read_resume(self.resume_path)
+                    print("Processing resume from path:", self.resume_path)  # Debug print
+                    print("Extracted resume text (first 100 chars):", resume_text[:100])
                 except Exception as e:
                     self.root.after(0, lambda: messagebox.showerror("Error", f"Error reading resume file: {str(e)}"))
                     self.status_var.set("Error reading resume file")
                     return
 
                 self.progress_var.set(50)
-                similarity_score = ranking_method(job_desc, resume_text)
+                similarity_score = ranking_method(job_desc, resume_text, self.category_var.get())
                 self.progress_var.set(70)
                 if similarity_score > 0.7:
                     quality_text = "Great match! Your resume aligns well with the job description."

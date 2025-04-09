@@ -230,7 +230,7 @@ class ResumeMatcherGUI:
                 similarity_score = ranking_method(job_desc, resume_text, self.category_var.get())
                 self.progress_var.set(70)
                 if similarity_score > 0.7:
-                    quality_text = "Great match! Your resume aligns well with the job description."
+                    quality_text = "Excellent match! Your resume aligns well with the job description."
                 elif similarity_score > 0.5:
                     quality_text = "Good match. Consider highlighting relevant skills more prominently."
                 else:

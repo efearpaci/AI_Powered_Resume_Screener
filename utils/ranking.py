@@ -1,5 +1,6 @@
 import torch
 from models.sentence_transformer_model import encode_text
+from utils.keywords import extract_keywords
 ROLE_SKILLS = {
     "data science": ["python", "machine learning", "data analysis", "sql", "tensorflow", "pytorch", "r", "statistics"],
     "web designing": ["html", "css", "javascript", "react", "angular", "ux", "ui", "bootstrap", "photoshop"],
@@ -38,6 +39,8 @@ class AdvancedRankingModel:
             return standard_ranking(job_desc, resume_text)
 
         from utils.preprocessing import clean_resume
+        from utils.keywords import extract_keywords  # Import the dynamic skill extractor
+
         cleaned_job = clean_resume(job_desc) if job_desc else ""
         cleaned_resume = clean_resume(resume_text) if resume_text else ""
 
@@ -53,26 +56,32 @@ class AdvancedRankingModel:
         else:
             prob = torch.sigmoid(logits).item()
 
-        semantic_score = max(0, min(1, prob))
+        semantic_score = max(0, min(1, prob))  # No extra scaling
 
+        # Extract dynamic skills using job description keywords
+        dynamic_skills = extract_keywords(job_desc)
+
+        # Select required skills based on the job category
         try:
             job_category_lc = job_category.lower()
         except Exception:
             job_category_lc = ""
         if job_category_lc in ROLE_SKILLS:
-            required_skills = ROLE_SKILLS[job_category_lc]
+            static_skills = ROLE_SKILLS[job_category_lc]
         else:
-            required_skills = [
-                "python", "java", "c++", "c#", "javascript", "sql", "nosql",
-                "machine learning", "data analysis", "blockchain", "testing", "devops",
-                "cloud", "docker", "kubernetes", "tensorflow", "pytorch", "database",
-                "networking", "security", "angular", "react", "node"
-            ]
+            static_skills = ["python", "java", "c++", "c#", "javascript", "sql", "nosql",
+                             "machine learning", "data analysis", "blockchain", "testing", "devops",
+                             "cloud", "docker", "kubernetes", "tensorflow", "pytorch", "database",
+                             "networking", "security", "angular", "react", "node"]
 
-        skill_score = compute_skill_overlap(job_desc, resume_text, required_skills)
+        # Combine static skills with dynamic keywords (union of both sets)
+        combined_skills = list(set(static_skills) | dynamic_skills)
+
+        # Compute skill overlap score using combined skills
+        skill_score = compute_skill_overlap(job_desc, resume_text, combined_skills)
 
         # Combine semantic and skill scores (70% semantic, 30% skill)
-        combined_score = 0.7 * semantic_score + 0.3 * skill_score
+        combined_score = 0.7 * semantic_score + 0.3 * skill_score + 0.075
 
         return combined_score
 
